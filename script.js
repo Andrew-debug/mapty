@@ -56,17 +56,31 @@ const inputDistance = document.querySelector('.form__input--distance');
 const inputDuration = document.querySelector('.form__input--duration');
 const inputCadence = document.querySelector('.form__input--cadence');
 const inputElevation = document.querySelector('.form__input--elevation');
+const addItem = document.getElementById('add-btn');
+const reset = document.getElementById('reset-btn');
 
 class App {
   #map;
+  #mapZoomLevel = 13;
   #mapEvent;
   #workouts = [];
   constructor() {
+    // get user's position
     this._getPosition();
+
+    // get data from local storage
+    this._getLocalStorage();
+
+    // attach event handlers
     form.addEventListener('submit', this._newWorkout.bind(this));
     inputType.addEventListener('change', this._toggleElevationField);
+    containerWorkouts.addEventListener('click', this._moveToPopup.bind(this));
 
-    containerWorkouts.addEventListener('click', this._moveToPopup);
+    // add item
+    addItem.addEventListener('click', this.workoutRenderBtn.bind(this));
+
+    // reset
+    reset.addEventListener('click', this.reset);
   }
 
   _getPosition() {
@@ -81,7 +95,7 @@ class App {
     const { latitude, longitude } = position.coords;
     const coords = [latitude, longitude];
 
-    this.#map = L.map('map').setView(coords, 13);
+    this.#map = L.map('map').setView(coords, this.#mapZoomLevel);
 
     L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
       attribution:
@@ -90,6 +104,10 @@ class App {
 
     // handling clicks on map
     this.#map.on('click', this._showForm.bind(this));
+
+    this.#workouts.forEach(work => {
+      this._renderWorkoutMarker(work);
+    });
   }
 
   _showForm(mapE) {
@@ -126,6 +144,7 @@ class App {
     const duration = +inputDuration.value;
     const { lat, lng } = this.#mapEvent.latlng;
     let workout;
+
     // if workout running, create runnin object
     if (type === 'running') {
       const cadence = +inputCadence.value;
@@ -133,7 +152,9 @@ class App {
         !validInputs(distance, duration, cadence) ||
         !allPositive(distance, duration, cadence)
       ) {
-        return alert('Inputs have to be positive numbers');
+        return alert(
+          'Inputs have to be positive numbers or pick a new place on the map'
+        );
       }
 
       workout = new Running([lat, lng], distance, duration, cadence);
@@ -164,6 +185,9 @@ class App {
 
     // prettier-ignore
     this._hideForm()
+
+    // set local storage to all workouts
+    this._setLocalStorage();
   }
 
   // render workout on map as marker
@@ -239,6 +263,44 @@ class App {
 
   _moveToPopup(e) {
     const workoutEl = e.target.closest('.workout');
+    if (!workoutEl) return;
+    const workout = this.#workouts.find(
+      work => work.id === workoutEl.dataset.id
+    );
+
+    this.#map.setView(workout.coords, this.#mapZoomLevel, {
+      animate: true,
+      pan: {
+        duration: 1,
+      },
+    });
+  }
+
+  _setLocalStorage() {
+    localStorage.setItem('workouts', JSON.stringify(this.#workouts));
+  }
+
+  _getLocalStorage() {
+    const data = JSON.parse(localStorage.getItem('workouts'));
+    if (!data) return;
+
+    this.#workouts = data;
+    this.#workouts.forEach(work => {
+      this._renderWorkout(work);
+    });
+  }
+
+  workoutRenderBtn(e) {
+    if (!this.#mapEvent) {
+      alert('click on the map');
+    } else {
+      this._newWorkout(e);
+    }
+  }
+
+  reset() {
+    localStorage.removeItem('workouts');
+    location.reload();
   }
 }
 
